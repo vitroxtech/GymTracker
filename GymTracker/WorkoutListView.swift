@@ -39,6 +39,11 @@ struct WorkoutListView: View {
                         Label("Add Workout", systemImage: "plus")
                     }
                 }
+                ToolbarItem(placement: .navigationBarLeading) {
+                    NavigationLink(destination: CSVDataView()) {
+                        Label("CSV Data", systemImage: "arrow.up.doc")
+                    }
+                }
             }
             .sheet(isPresented: $showingAddWorkout) {
                 AddWorkoutView()

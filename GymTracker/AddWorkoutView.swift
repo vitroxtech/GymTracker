@@ -42,16 +42,6 @@ struct AddWorkoutView: View {
                     addWorkout()
                 }
                 .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || selectedCategories.isEmpty)
-
-                // New Section for JSON Import/Export
-                Section(header: Text("Import / Export JSON Data")) {
-                    Button("Export to JSON File") {
-                       // exportToJSON(context: viewContext)
-                    }
-                    Button("Import from JSON File") {
-                        // importFromJSON(context: viewContext)
-                    }
-                }
             }
             .navigationTitle("Add Workout")
             .toolbar {
@@ -64,8 +54,17 @@ struct AddWorkoutView: View {
 
     private func addWorkout() {
         let newWorkout = Workout(context: viewContext)
-        newWorkout.name = name
-        // Optionally save selectedCategories and note to the workout or exercises
+        newWorkout.name = name.trimmingCharacters(in: .whitespaces)
+
+        // Create exercises for each selected category and apply the note
+        for categoryName in selectedCategories {
+            let exercise = Exercise(context: viewContext)
+            exercise.name = "\(name): \(categoryName)" // Default name based on workout and category
+            exercise.category = categoryName
+            exercise.note = note.trimmingCharacters(in: .whitespaces)
+            exercise.workout = newWorkout
+            newWorkout.addToExercises(exercise)
+        }
 
         do {
             try viewContext.save()

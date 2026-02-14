@@ -7,6 +7,11 @@ struct WorkoutDetailView: View {
 
     @State private var selectedCategory: ExerciseCategory? = nil
     @State private var showingAddExercise = false
+    
+    // Rename state
+    @State private var showingRenameAlert = false
+    @State private var exerciseToRename: Exercise?
+    @State private var newExerciseName = ""
 
     // Filter exercises by selected category or show all if none selected
     var filteredExercises: [Exercise] {
@@ -59,6 +64,23 @@ struct WorkoutDetailView: View {
                                 Text(exercise.name ?? "Unnamed Exercise")
                             }
                         }
+                        .contextMenu {
+                            Button {
+                                exerciseToRename = exercise
+                                newExerciseName = exercise.name ?? ""
+                                showingRenameAlert = true
+                            } label: {
+                                Label("Rename", systemImage: "pencil")
+                            }
+                            
+                            Button(role: .destructive) {
+                                if let index = filteredExercises.firstIndex(of: exercise) {
+                                    removeExercisesFromWorkout(at: IndexSet(integer: index))
+                                }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
                     }
                     .onDelete(perform: removeExercisesFromWorkout)
                 }
@@ -76,6 +98,29 @@ struct WorkoutDetailView: View {
             AddExerciseView(workout: workout)
                 .environment(\.managedObjectContext, viewContext)
         }
+        .alert("Rename Exercise", isPresented: $showingRenameAlert) {
+            TextField("Exercise Name", text: $newExerciseName)
+            Button("Cancel", role: .cancel) { exerciseToRename = nil }
+            Button("Save") {
+                renameExercise()
+            }
+        } message: {
+            Text("Enter a new name for this exercise.")
+        }
+    }
+
+    private func renameExercise() {
+        guard let exercise = exerciseToRename else { return }
+        let trimmedName = newExerciseName.trimmingCharacters(in: .whitespaces)
+        if !trimmedName.isEmpty {
+            exercise.name = trimmedName
+            do {
+                try viewContext.save()
+            } catch {
+                print("Error renaming exercise: \(error.localizedDescription)")
+            }
+        }
+        exerciseToRename = nil
     }
 
     private func removeExercisesFromWorkout(at offsets: IndexSet) {
