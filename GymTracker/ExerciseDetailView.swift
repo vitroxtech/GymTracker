@@ -72,8 +72,8 @@ struct ExerciseDetailView: View {
 
             Section(header: Text("Exercise Note")) {
                 TextEditor(text: $noteText)
-                    .frame(minHeight: 20)
-                    .padding(4)
+                    .frame(minHeight: 25)
+                    .padding(2)
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
                             .stroke(Color.gray.opacity(0.4))

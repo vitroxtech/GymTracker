@@ -15,9 +15,9 @@ struct SessionHistoryView: View {
             ForEach(sessions, id: \.self) { session in
                 HStack {
                     VStack(alignment: .leading) {
-                        // Show date
+                        Text(session.workout?.name ?? "Unnamed Workout")
+                                                    .font(.headline)
                         Text(formattedDateOnly(session.startTime))
-
                         // Show duration (if ended)
                         if let endTime = session.endTime {
                             Text(durationString(from: session.startTime, to: endTime))

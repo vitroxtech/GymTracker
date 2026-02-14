@@ -46,10 +46,10 @@ struct AddWorkoutView: View {
                 // New Section for JSON Import/Export
                 Section(header: Text("Import / Export JSON Data")) {
                     Button("Export to JSON File") {
-                        exportToJSON(context: viewContext)
+                       // exportToJSON(context: viewContext)
                     }
                     Button("Import from JSON File") {
-                        importFromJSON(context: viewContext)
+                        // importFromJSON(context: viewContext)
                     }
                 }
             }
