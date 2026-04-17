@@ -12,52 +12,79 @@ struct SessionHistoryView: View {
 
     var body: some View {
         List {
-            ForEach(sessions, id: \.self) { session in
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text(session.workout?.name ?? "Unnamed Workout")
-                                                    .font(.headline)
-                        Text(formattedDateOnly(session.startTime))
-                        // Show duration (if ended)
-                        if let endTime = session.endTime {
-                            Text(durationString(from: session.startTime, to: endTime))
-                                .font(.subheadline)
+            Section(header: Text("Past Sessions").sectionHeaderStyle()) {
+                ForEach(sessions, id: \.self) { session in
+                    HStack(alignment: .top, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(session.workout?.name ?? "Unnamed Workout")
+                                .font(.headline)
+                            
+                            HStack {
+                                Image(systemName: "calendar")
+                                Text(formattedDateOnly(session.startTime))
+                            }
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            
+                            if let endTime = session.endTime {
+                                HStack {
+                                    Image(systemName: "clock")
+                                    Text(durationString(from: session.startTime, to: endTime))
+                                }
+                                .font(.caption)
                                 .foregroundColor(.blue)
-                        } else {
-                            Text("Ongoing")
-                                .font(.subheadline)
-                                .foregroundColor(.green)
+                            } else {
+                                Text("Ongoing")
+                                    .font(.caption.bold())
+                                    .foregroundColor(.green)
+                            }
                         }
-
-                        // Show volume in red
-                        Text("Total volume: \(session.totalVolume, specifier: "%.0f")")
-                            .foregroundColor(.red)
-                    }
-
-                    Spacer()
-
-                    // End session button
-                    if session.endTime == nil {
-                        Button("X") {
-                            finishSession(session)
+                        
+                        Spacer()
+                        
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text("\(session.totalVolume, specifier: "%.0f")")
+                                .font(.system(.title3, design: .rounded))
+                                .fontWeight(.bold)
+                                .foregroundColor(.blue)
+                            Text("kg total")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            
+                            if session.endTime == nil {
+                                Button(action: { finishSession(session) }) {
+                                    Text("Finish")
+                                        .font(.subheadline.bold())
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 8)
+                                        .background(Color.green)
+                                        .clipShape(Capsule())
+                                        .shadow(color: .green.opacity(0.3), radius: 4, x: 0, y: 2)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                            }
                         }
-                        .buttonStyle(BorderlessButtonStyle())
-                        .foregroundColor(.red)
                     }
+                    .padding(.vertical, 4)
                 }
-                .padding(.vertical, 6)
+                .onDelete(perform: deleteSessions)
             }
-            .onDelete(perform: deleteSessions)
         }
-        .navigationTitle("Gym home")
+        .listStyle(InsetGroupedListStyle())
+        .navigationTitle("History")
     }
 
     private func finishSession(_ session: Session) {
-        session.endTime = Date()
-        do {
-            try viewContext.save()
-        } catch {
-            print("Failed to finish session: \(error.localizedDescription)")
+        if let workout = session.workout {
+            SessionManager.shared.finishActiveSession(for: workout, context: viewContext)
+        } else {
+            session.endTime = Date()
+            do {
+                try viewContext.save()
+            } catch {
+                print("Failed to finish session: \(error.localizedDescription)")
+            }
         }
     }
 

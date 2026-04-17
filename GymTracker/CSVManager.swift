@@ -65,8 +65,12 @@ class CSVManager {
         // Step 1: Replace data - Delete all existing workouts (and cascade)
         deleteAllData(context: context)
         
-        let rows = csvString.components(separatedBy: "\n")
+        let rows = csvString.components(separatedBy: .newlines)
         guard rows.count > 1 else { return }
+        
+        // Detect delimiter from header
+        let headerRow = rows[0]
+        let delimiter = determineDelimiter(from: headerRow)
         
         // Skip header
         let dataRows = rows.dropFirst()
@@ -77,10 +81,14 @@ class CSVManager {
         var createdSessions: [String: Session] = [:] // Key: "workoutName|sessionStart"
 
         for row in dataRows {
-            if row.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { continue }
+            let cleanRow = row.trimmingCharacters(in: .whitespacesAndNewlines)
+            if cleanRow.isEmpty { continue }
             
-            let columns = parseCSVRow(row)
-            if columns.count < 9 { continue }
+            var columns = parseCSVRow(cleanRow, delimiter: delimiter)
+            // Pad columns to 9 if Excel truncated trailing empty values
+            while columns.count < 9 {
+                columns.append("")
+            }
             
             let workoutName = columns[0].trimmingCharacters(in: CharacterSet(charactersIn: "\""))
             if workoutName.isEmpty { continue }
@@ -116,7 +124,6 @@ class CSVManager {
                 let exercise: Exercise
                 if let existing = createdExercises[exerciseKey] {
                     exercise = existing
-                    // Update note if it was empty before or changed (though in replacement mode it's fresh)
                     exercise.note = exerciseNote
                 } else {
                     exercise = Exercise(context: context)
@@ -131,21 +138,34 @@ class CSVManager {
                 // 3. Create Session and SetEntry if weight/reps exist
                 if let w = weight, let r = reps {
                     let session: Session
-                    let sessionKey = "\(workoutName)|\(sessionStartStr)"
                     
-                    if !sessionStartStr.isEmpty, let existing = createdSessions[sessionKey] {
+                    // Improved Session Key: use explicit session start if available, 
+                    // otherwise fallback to workout name + date from exercise timestamp
+                    let datePart = timestamp != nil ? dateFormatter.string(from: Calendar.current.startOfDay(for: timestamp!)) : "no-date"
+                    let sessionKey = !sessionStartStr.isEmpty ? "\(workoutName)|\(sessionStartStr)" : "\(workoutName)|fallback|\(datePart)"
+                    
+                    if let existing = createdSessions[sessionKey] {
                         session = existing
                     } else {
                         session = Session(context: context)
-                        session.startTime = sessionStart
-                        session.endTime = sessionEnd
+                        session.startTime = sessionStart ?? timestamp // Use exercise timestamp as fallback
+                        session.endTime = sessionEnd ?? timestamp
                         session.workout = workout
-                        session.duration = sessionEnd?.timeIntervalSince(sessionStart ?? Date()) ?? 0
                         workout.addToSessions(session)
-                        if !sessionStartStr.isEmpty {
-                            createdSessions[sessionKey] = session
+                        createdSessions[sessionKey] = session
+                    }
+                    
+                    // Update session boundaries if using fallback approach
+                    if let ts = timestamp {
+                        if session.startTime == nil || ts < session.startTime! {
+                            session.startTime = ts
+                        }
+                        if session.endTime == nil || ts > session.endTime! {
+                            session.endTime = ts
                         }
                     }
+                    
+                    session.duration = session.endTime?.timeIntervalSince(session.startTime ?? Date()) ?? 0
                     
                     let setEntry = SetEntry(context: context)
                     setEntry.weight = w
@@ -157,7 +177,7 @@ class CSVManager {
                     exercise.addToSetEntries(setEntry)
                     session.addToSetEntries(setEntry)
                     
-                    // Increment volume
+                    // Update volume
                     session.totalVolume += Double(r) * w
                 }
             }
@@ -197,7 +217,17 @@ class CSVManager {
         }
     }
     
-    private func parseCSVRow(_ row: String) -> [String] {
+    private func determineDelimiter(from header: String) -> Character {
+        let commaCount = header.filter { $0 == "," }.count
+        let semicolonCount = header.filter { $0 == ";" }.count
+        let tabCount = header.filter { $0 == "\t" }.count
+        
+        if tabCount > commaCount && tabCount > semicolonCount { return "\t" }
+        if semicolonCount > commaCount { return ";" }
+        return ","
+    }
+    
+    private func parseCSVRow(_ row: String, delimiter: Character) -> [String] {
         var result: [String] = []
         var currentToken = ""
         var insideQuotes = false
@@ -205,7 +235,7 @@ class CSVManager {
         for char in row {
             if char == "\"" {
                 insideQuotes.toggle()
-            } else if char == "," && !insideQuotes {
+            } else if char == delimiter && !insideQuotes {
                 result.append(currentToken)
                 currentToken = ""
             } else {

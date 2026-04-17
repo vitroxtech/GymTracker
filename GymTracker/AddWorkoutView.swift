@@ -11,7 +11,7 @@ struct AddWorkoutView: View {
     let allCategories = ["Legs", "Chest", "Back", "Shoulders", "Biceps", "Triceps", "Abs"]
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section(header: Text("Workout Info")) {
                     TextField("Workout Name", text: $name)

@@ -19,8 +19,18 @@ struct ExerciseLibraryView: View {
     ) private var allExercises: FetchedResults<Exercise>
     
     // Exercises not yet in this workout
-    var exercisesNotInWorkout: [Exercise] {
-        allExercises.filter { !workout.exercisesArray.contains($0) }
+    var uniqueExercisesNotInWorkout: [Exercise] {
+        var seenNames = Set<String>()
+        var result = [Exercise]()
+        let workoutNames = Set(workout.exercisesArray.compactMap { $0.name })
+        
+        for exercise in allExercises {
+            if let name = exercise.name, !seenNames.contains(name), !workoutNames.contains(name) {
+                seenNames.insert(name)
+                result.append(exercise)
+            }
+        }
+        return result
     }
     
     @Environment(\.dismiss) var dismiss
@@ -28,11 +38,11 @@ struct ExerciseLibraryView: View {
     var body: some View {
         NavigationView {
             List {
-                if exercisesNotInWorkout.isEmpty {
+                if uniqueExercisesNotInWorkout.isEmpty {
                     Text("No new exercises to add.")
                         .foregroundColor(.secondary)
                 } else {
-                    ForEach(exercisesNotInWorkout, id: \.self) { exercise in
+                    ForEach(uniqueExercisesNotInWorkout, id: \.self) { exercise in
                         Button(action: {
                             addExerciseToWorkout(exercise)
                         }) {
@@ -52,8 +62,33 @@ struct ExerciseLibraryView: View {
         }
     }
 
-    private func addExerciseToWorkout(_ exercise: Exercise) {
-        workout.addToExercises(exercise)
+    private func addExerciseToWorkout(_ exerciseTemplate: Exercise) {
+        let templateName = exerciseTemplate.name ?? ""
+        let request: NSFetchRequest<Exercise> = Exercise.fetchRequest()
+        request.predicate = NSPredicate(format: "name == %@ AND workout == nil", templateName)
+        
+        let orphans = (try? viewContext.fetch(request)) ?? []
+        let newExercise: Exercise
+        
+        if !orphans.isEmpty {
+            newExercise = orphans[0]
+            for i in 1..<orphans.count {
+                let other = orphans[i]
+                if let sets = other.setEntries as? Set<SetEntry> {
+                    for set in sets { set.exercise = newExercise }
+                }
+                viewContext.delete(other)
+            }
+        } else {
+            newExercise = Exercise(context: viewContext)
+            newExercise.name = templateName
+            newExercise.category = exerciseTemplate.category
+            newExercise.note = exerciseTemplate.note
+        }
+        
+        newExercise.workout = workout
+        workout.addToExercises(newExercise)
+        
         do {
             try viewContext.save()
             dismiss()

@@ -11,44 +11,35 @@ struct WorkoutListView: View {
     @State private var showingAddWorkout = false
     
     var body: some View {
-        NavigationView {
-            GeometryReader { geo in
-                VStack(spacing: 0) {
-                    // Top half: Workouts List
-                    List {
-                        ForEach(workouts) { workout in
-                            NavigationLink(destination: WorkoutDetailView(workout: workout)) {
-                                Text(workout.name ?? "Unnamed Workout")
-                            }
+        List {
+            Section(header: Text("My Workouts").sectionHeaderStyle()) {
+                ForEach(workouts) { workout in
+                    NavigationLink(destination: WorkoutDetailView(workout: workout)) {
+                        HStack {
+                            Image(systemName: "folder")
+                                .foregroundColor(.blue)
+                            Text(workout.name ?? "Unnamed Workout")
+                                .font(.headline)
                         }
-                        .onDelete(perform: deleteWorkouts)
-                    }
-                    .frame(height: geo.size.height / 2)
-                    
-                    Divider()
-                    
-                    // Bottom half: Session History
-                    SessionHistoryView()
-                        .frame(height: geo.size.height / 2)
-                }
-            }
-            .navigationTitle("Workouts")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showingAddWorkout = true }) {
-                        Label("Add Workout", systemImage: "plus")
+                        .padding(.vertical, 4)
                     }
                 }
-                ToolbarItem(placement: .navigationBarLeading) {
-                    NavigationLink(destination: CSVDataView()) {
-                        Label("CSV Data", systemImage: "arrow.up.doc")
-                    }
+                .onDelete(perform: deleteWorkouts)
+            }
+        }
+        .listStyle(InsetGroupedListStyle())
+        .navigationTitle("Workouts")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: { showingAddWorkout = true }) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title3)
                 }
             }
-            .sheet(isPresented: $showingAddWorkout) {
-                AddWorkoutView()
-                    .environment(\.managedObjectContext, viewContext)
-            }
+        }
+        .sheet(isPresented: $showingAddWorkout) {
+            AddWorkoutView()
+                .environment(\.managedObjectContext, viewContext)
         }
     }
     

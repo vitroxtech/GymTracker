@@ -4,6 +4,7 @@ struct CSVDataView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @State private var csvText: String = ""
     @State private var showingImportAlert = false
+    @State private var showingSettings = false
     @State private var importMessage = ""
     @FocusState private var isTextFieldFocused: Bool
 
@@ -73,6 +74,16 @@ struct CSVDataView: View {
             .padding(.bottom)
         }
         .navigationTitle("CSV Data")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: { showingSettings = true }) {
+                    Image(systemName: "gear")
+                }
+            }
+        }
+        .sheet(isPresented: $showingSettings) {
+            SettingsView()
+        }
         .alert("IMPORT & REPLACE DATA", isPresented: $showingImportAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Import & Erase Current", role: .destructive) {

@@ -7,9 +7,36 @@ struct GymTrackerApp: App {
 
     var body: some Scene {
         WindowGroup {
-            WorkoutListView().preferredColorScheme(.dark)
-                .environment(\.managedObjectContext, persistenceController.container.viewContext)
-            
+            TabView {
+                NavigationStack {
+                    WorkoutListView()
+                }
+                .tabItem {
+                    Label("Workouts", systemImage: "dumbbell.fill")
+                }
+                
+                NavigationStack {
+                    SessionHistoryView()
+                }
+                .tabItem {
+                    Label("History", systemImage: "clock.fill")
+                }
+                
+                NavigationStack {
+                    BodyMetricsView()
+                }
+                .tabItem {
+                    Label("Metrics", systemImage: "figure.stand")
+                }
+                
+                NavigationStack {
+                    CSVDataView()
+                }
+                .tabItem {
+                    Label("Data", systemImage: "arrow.up.doc.fill")
+                }
+            }
+            .environment(\.managedObjectContext, persistenceController.container.viewContext)
         }
     }
 }

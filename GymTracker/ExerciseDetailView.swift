@@ -27,124 +27,265 @@ struct ExerciseDetailView: View {
     }
 
     var body: some View {
-        Form {
-            if cooldownManager.isActive {
-                Section {
-                    VStack(spacing: 10) {
+        ScrollView {
+            VStack(spacing: 20) {
+                if cooldownManager.isActive {
+                    GymCard {
+                        VStack(spacing: 16) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("RESTING")
+                                        .font(.caption2.bold())
+                                        .foregroundColor(.blue)
+                                        .tracking(2)
+                                    
+                                    Text(cooldownManager.remaining > 30 ? "Stay focused!" : "Get ready!")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                Spacer()
+                                
+                                Button(action: { cooldownManager.cancelCooldown() }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(.secondary)
+                                        .font(.title3)
+                                }
+                            }
+                            
+                            HStack(alignment: .lastTextBaseline, spacing: 4) {
+                                Text("\(cooldownManager.remaining / 60):\(String(format: "%02d", cooldownManager.remaining % 60))")
+                                    .font(.system(size: 48, weight: .bold, design: .rounded))
+                                    .foregroundColor(.blue)
+                                    .contentTransition(.numericText())
+                                
+                                Text("min")
+                                    .font(.title3.bold())
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    Capsule()
+                                        .fill(Color.blue.opacity(0.1))
+                                        .frame(height: 8)
+                                    
+                                    Capsule()
+                                        .fill(LinearGradient(colors: [.blue, .cyan], startPoint: .leading, endPoint: .trailing))
+                                        .frame(width: max(0, geo.size.width * CGFloat(1 - Double(cooldownManager.remaining) / cooldownManager.totalDuration)), height: 8)
+                                        .animation(.linear(duration: 1), value: cooldownManager.remaining)
+                                }
+                            }
+                            .frame(height: 8)
+                        }
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+
+                if !groupedSets.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Progress").sectionHeaderStyle()
+                        GymCard {
+                            Chart {
+                                ForEach(groupedSets, id: \.date) { (date, sets) in
+                                    AreaMark(
+                                        x: .value("Date", date),
+                                        y: .value("Volume", volume(for: sets))
+                                    )
+                                    .foregroundStyle(LinearGradient(colors: [.blue.opacity(0.3), .blue.opacity(0)], startPoint: .top, endPoint: .bottom))
+                                    
+                                    LineMark(
+                                        x: .value("Date", date),
+                                        y: .value("Volume", volume(for: sets))
+                                    )
+                                    .foregroundStyle(.blue)
+                                    .symbol {
+                                        Circle()
+                                            .strokeBorder(.blue, lineWidth: 2)
+                                            .background(Circle().fill(.background))
+                                            .frame(width: 10, height: 10)
+                                    }
+                                }
+                            }
+                            .frame(height: 160)
+                            .chartXAxis {
+                                AxisMarks { _ in
+                                    AxisValueLabel(format: .dateTime.month().day())
+                                }
+                            }
+                        }
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Add Set").sectionHeaderStyle()
+                    GymCard {
+                        VStack(spacing: 20) {
+                            HStack(spacing: 20) {
+                                // Weight Input
+                                VStack(spacing: 8) {
+                                    Text("KG")
+                                        .font(.caption2)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.secondary)
+                                    
+                                    TextField("0", value: $weightPickerValue, formatter: NumberFormatter())
+                                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                                        .keyboardType(.decimalPad)
+                                        .multilineTextAlignment(.center)
+                                        .frame(width: 80, height: 50)
+                                        .background(Color(.systemGray6))
+                                        .cornerRadius(10)
+                                    
+                                    HStack {
+                                        Button("-1") { weightPickerValue = max(0, weightPickerValue - 1) }
+                                        Button("+1") { weightPickerValue += 1 }
+                                    }
+                                    .font(.caption)
+                                    .buttonStyle(.bordered)
+                                }
+                                
+                                Divider().frame(height: 60)
+                                
+                                // Reps Input
+                                VStack(spacing: 8) {
+                                    Text("REPS")
+                                        .font(.caption2)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.secondary)
+                                    
+                                    TextField("0", value: $repsPickerValue, formatter: NumberFormatter())
+                                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                                        .keyboardType(.numberPad)
+                                        .multilineTextAlignment(.center)
+                                        .frame(width: 80, height: 50)
+                                        .background(Color(.systemGray6))
+                                        .cornerRadius(10)
+                                    
+                                    HStack {
+                                        Button("-1") { repsPickerValue = max(0, repsPickerValue - 1) }
+                                        Button("+1") { repsPickerValue += 1 }
+                                    }
+                                    .font(.caption)
+                                    .buttonStyle(.bordered)
+                                }
+                            }
+                            
+                            PrimaryButton("Log Set", icon: "plus") {
+                                addSet()
+                            }
+                        }
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Rest Time").sectionHeaderStyle()
+                    GymCard {
                         HStack {
-                            Text("Rest Time")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-
+                            Text("Duration")
+                                .fontWeight(.semibold)
                             Spacer()
+                            
+                            let currentRestTime: Int16 = exercise.restTime == 0 ? 120 : exercise.restTime
+                            Stepper(value: Binding(
+                                get: { Int(currentRestTime) },
+                                set: { 
+                                    exercise.restTime = Int16($0)
+                                    try? viewContext.save()
+                                }
+                            ), in: 0...900, step: 15) {
+                                Text("\(currentRestTime) seconds")
+                                    .fontWeight(.bold)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
 
-                            Button(action: {
-                                cooldownManager.cancelCooldown()
-                            }) {
-                                Image(systemName: "xmark.circle.fill")
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Notes").sectionHeaderStyle()
+                    GymCard {
+                        TextEditor(text: $noteText)
+                            .frame(minHeight: 60)
+                            .onChange(of: noteText) { newValue in
+                                exercise.note = newValue
+                                try? viewContext.save()
+                            }
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("History").sectionHeaderStyle()
+                    ForEach(groupedSets.reversed(), id: \.date) { (date, sets) in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text(formattedDate(date))
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                Spacer()
+                                
+                                Text("\(volume(for: sets), specifier: "%.0f") kg volume")
+                                    .font(.caption.bold())
                                     .foregroundColor(.red)
-                                    .font(.title3)
                             }
-
-                            ProgressView(value: Double(120 - cooldownManager.remaining), total: 120)
-                                .progressViewStyle(LinearProgressViewStyle(tint: .green))
-                        }
-                        .foregroundColor(.red)
-                    }
-                }
-            }
-
-            if !groupedSets.isEmpty {
-                Section(header: Text("Volume Over Time").foregroundColor(.blue)) {
-                    Chart {
-                        ForEach(groupedSets, id: \.date) { (date, sets) in
-                            LineMark(
-                                x: .value("Date", date),
-                                y: .value("Volume", volume(for: sets))
-                            )
-                            .foregroundStyle(.green)
-                            .symbol(Circle())
-                        }
-                    }
-                    .frame(height: 150)
-                }
-            }
-
-            Section(header: Text("Exercise Note")) {
-                TextEditor(text: $noteText)
-                    .frame(minHeight: 25)
-                    .padding(2)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.gray.opacity(0.4))
-                    )
-                    .onChange(of: noteText) { newValue in
-                        exercise.note = newValue
-                        do {
-                            try viewContext.save()
-                        } catch {
-                            print("Failed to autosave note: \(error.localizedDescription)")
-                        }
-                    }
-            }
-
-            Section(header: Text("Add Set")) {
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text("Weight (kg)")
-                            .font(.subheadline)
-                            .foregroundColor(.blue)
-                        Picker("", selection: $weightPickerValue) {
-                            ForEach(1...200, id: \.self) { value in
-                                Text("\(value)").tag(value)
+                            .padding(.horizontal)
+                            
+                            VStack(spacing: 1) {
+                                ForEach(sets.reversed(), id: \.self) { set in
+                                    HStack {
+                                        Text("\(set.weight, specifier: "%.1f") kg")
+                                            .fontWeight(.semibold)
+                                        Text("x")
+                                            .foregroundColor(.secondary)
+                                        Text("\(set.reps) reps")
+                                            .fontWeight(.semibold)
+                                        
+                                        Spacer()
+                                        
+                                        Text(formattedTime(set.timestamp))
+                                            .font(.caption)
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                    .padding()
+                                    .background(Color(.secondarySystemGroupedBackground))
+                                    .contextMenu {
+                                        Button("Delete", role: .destructive) {
+                                            deleteSet(set)
+                                        }
+                                    }
+                                }
                             }
+                            .cornerRadius(12)
+                            .padding(.horizontal)
                         }
-                        .pickerStyle(WheelPickerStyle())
-                        .frame(maxWidth: 100, maxHeight: 100)
-                        .clipped()
                     }
-
-                    Spacer()
-
-                    VStack(alignment: .leading) {
-                        Text("Reps")
-                            .font(.subheadline)
-                            .foregroundColor(.blue)
-                        Picker("", selection: $repsPickerValue) {
-                            ForEach(1...200, id: \.self) { value in
-                                Text("\(value)").tag(value)
-                            }
-                        }
-                        .pickerStyle(WheelPickerStyle())
-                        .frame(maxWidth: 100, maxHeight: 100)
-                        .clipped()
-                    }
-                }
-
-                Button("Add Set") {
-                    addSet()
                 }
             }
-
-            ForEach(groupedSets.reversed(), id: \.date) { (date, sets) in
-                Section(header: Text("\(formattedDate(date)) — Volume: \(volume(for: sets), specifier: "%.0f") kg").foregroundColor(.red)) {
-                    ForEach(sets.reversed(), id: \.self) { set in
+            .padding(.bottom, 30)
+            
+            if currentSession != nil {
+                VStack {
+                    Divider()
+                    Button(action: { finishWorkout() }) {
                         HStack {
-                            Text("\(set.weight, specifier: "%.1f") kg x \(set.reps) reps")
-                            Spacer()
-                            Text(formattedTime(set.timestamp))
-                                .font(.caption)
-                                .foregroundColor(.blue)
+                            Image(systemName: "checkmark.circle.fill")
+                            Text("Finish Workout Session")
+                                .fontWeight(.bold)
                         }
-                        .contextMenu {
-                            Button("Delete", role: .destructive) {
-                                deleteSet(set)
-                            }
-                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.green)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                        .padding()
+                        .shadow(color: .green.opacity(0.3), radius: 8, x: 0, y: 4)
                     }
                 }
+                .background(Color(.systemGroupedBackground))
             }
         }
+        .background(Color(.systemGroupedBackground))
         .navigationTitle(exercise.name ?? "Exercise")
         .onAppear {
             requestNotificationPermission()
@@ -179,10 +320,19 @@ struct ExerciseDetailView: View {
 
         do {
             try viewContext.save()
-            cooldownManager.startCooldown()
+            let cooldownDuration = exercise.restTime == 0 ? 120 : TimeInterval(exercise.restTime)
+            cooldownManager.startCooldown(duration: cooldownDuration)
         } catch {
             print("Failed to save set: \(error.localizedDescription)")
         }
+    }
+
+    private func finishWorkout() {
+        guard let workout = exercise.workout else { return }
+        SessionManager.shared.finishActiveSession(for: workout, context: viewContext)
+        currentSession = nil
+        sessionFinished = true
+        // Maybe dismiss or show a success state? For now just clear currentSession
     }
 
     private func deleteSet(_ set: SetEntry) {
@@ -213,7 +363,27 @@ struct ExerciseDetailView: View {
             currentSession = nil
             return
         }
-        currentSession = SessionManager.shared.activeSessions[workout]
+        
+        if let session = SessionManager.shared.activeSessions[workout] {
+            currentSession = session
+            return
+        }
+        
+        // If not in memory, check for unfinished sessions in Core Data
+        let request: NSFetchRequest<Session> = Session.fetchRequest()
+        request.predicate = NSPredicate(format: "workout == %@ AND endTime == nil", workout)
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \Session.startTime, ascending: false)]
+        request.fetchLimit = 1
+        
+        do {
+            currentSession = try viewContext.fetch(request).first
+            if let session = currentSession {
+                // Sync back to SessionManager cache
+                SessionManager.shared.activeSessions[workout] = session
+            }
+        } catch {
+            print("Error recovering session in ExerciseDetailView: \(error)")
+        }
     }
 
     private func volume(for sets: [SetEntry]) -> Double {

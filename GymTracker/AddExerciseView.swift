@@ -28,12 +28,22 @@ struct AddExerciseView: View {
         sortDescriptors: [NSSortDescriptor(keyPath: \Exercise.name, ascending: true)]
     ) private var allExercises: FetchedResults<Exercise>
 
-    var exercisesNotInWorkout: [Exercise] {
-        allExercises.filter { !workout.exercisesArray.contains($0) }
+    var uniqueExercisesNotInWorkout: [Exercise] {
+        var seenNames = Set<String>()
+        var result = [Exercise]()
+        let workoutNames = Set(workout.exercisesArray.compactMap { $0.name })
+        
+        for exercise in allExercises {
+            if let name = exercise.name, !seenNames.contains(name), !workoutNames.contains(name) {
+                seenNames.insert(name)
+                result.append(exercise)
+            }
+        }
+        return result
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack {
                 Picker("Mode", selection: $mode) {
                     ForEach(Mode.allCases) { mode in
@@ -62,11 +72,11 @@ struct AddExerciseView: View {
                     }
                 } else {
                     List {
-                        if exercisesNotInWorkout.isEmpty {
+                        if uniqueExercisesNotInWorkout.isEmpty {
                             Text("No new exercises to add.")
                                 .foregroundColor(.secondary)
                         } else {
-                            ForEach(exercisesNotInWorkout, id: \.self) { exercise in
+                            ForEach(uniqueExercisesNotInWorkout, id: \.self) { exercise in
                                 MultipleSelectionRow(
                                     exercise: exercise,
                                     isSelected: selectedExercises.contains(exercise)
@@ -97,10 +107,31 @@ struct AddExerciseView: View {
     }
 
     private func saveNewExercise() {
-        let newExercise = Exercise(context: viewContext)
-        newExercise.name = name.trimmingCharacters(in: .whitespaces)
-        newExercise.category = category.rawValue
-
+        let trimmedName = name.trimmingCharacters(in: .whitespaces)
+        
+        let request: NSFetchRequest<Exercise> = Exercise.fetchRequest()
+        request.predicate = NSPredicate(format: "name == %@ AND workout == nil", trimmedName)
+        
+        let orphans = (try? viewContext.fetch(request)) ?? []
+        let newExercise: Exercise
+        
+        if !orphans.isEmpty {
+            newExercise = orphans[0]
+            newExercise.category = category.rawValue
+            for i in 1..<orphans.count {
+                let other = orphans[i]
+                if let sets = other.setEntries as? Set<SetEntry> {
+                    for set in sets { set.exercise = newExercise }
+                }
+                viewContext.delete(other)
+            }
+        } else {
+            newExercise = Exercise(context: viewContext)
+            newExercise.name = trimmedName
+            newExercise.category = category.rawValue
+        }
+        
+        newExercise.workout = workout
         workout.addToExercises(newExercise)
 
         do {
@@ -120,8 +151,31 @@ struct AddExerciseView: View {
     }
 
     private func addSelectedExercises() {
-        for exercise in selectedExercises {
-            workout.addToExercises(exercise)
+        for exerciseTemplate in selectedExercises {
+            let templateName = exerciseTemplate.name ?? ""
+            let request: NSFetchRequest<Exercise> = Exercise.fetchRequest()
+            request.predicate = NSPredicate(format: "name == %@ AND workout == nil", templateName)
+            
+            let orphans = (try? viewContext.fetch(request)) ?? []
+            let newExercise: Exercise
+            
+            if !orphans.isEmpty {
+                newExercise = orphans[0]
+                for i in 1..<orphans.count {
+                    let other = orphans[i]
+                    if let sets = other.setEntries as? Set<SetEntry> {
+                        for set in sets { set.exercise = newExercise }
+                    }
+                    viewContext.delete(other)
+                }
+            } else {
+                newExercise = Exercise(context: viewContext)
+                newExercise.name = templateName
+                newExercise.category = exerciseTemplate.category
+                newExercise.note = exerciseTemplate.note
+            }
+            newExercise.workout = workout
+            workout.addToExercises(newExercise)
         }
         do {
             try viewContext.save()
@@ -133,8 +187,14 @@ struct AddExerciseView: View {
     
     private func deleteExercises(at offsets: IndexSet) {
         for index in offsets {
-            let exerciseToDelete = exercisesNotInWorkout[index]
-            viewContext.delete(exerciseToDelete)
+            let exerciseName = uniqueExercisesNotInWorkout[index].name ?? ""
+            let request: NSFetchRequest<Exercise> = Exercise.fetchRequest()
+            request.predicate = NSPredicate(format: "name == %@ AND workout == nil", exerciseName)
+            if let orphans = try? viewContext.fetch(request) {
+                for orphan in orphans {
+                    viewContext.delete(orphan)
+                }
+            }
         }
 
         do {

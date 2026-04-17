@@ -41,56 +41,20 @@ struct WorkoutDetailView: View {
     }
     
     var body: some View {
-        VStack {
-            Picker("Category", selection: $selectedCategory) {
-                Text("All").tag(ExerciseCategory?.none)
-                ForEach(availableCategories, id: \.self) { category in
-                    Text(category.id).tag(ExerciseCategory?.some(category))
-                }
+        VStack(spacing: 0) {
+            if !availableCategories.isEmpty {
+                categoryFilterHeader
             }
-            .pickerStyle(SegmentedPickerStyle())
-            .padding()
 
-            List {
-                if filteredExercises.isEmpty {
-                    Text("No exercises in this category.")
-                        .foregroundColor(.secondary)
-                } else {
-                    ForEach(filteredExercises, id: \.self) { exercise in
-                        NavigationLink(destination: ExerciseDetailView(exercise: exercise)) {
-                            HStack {
-                                Image(systemName: hasSetToday(for: exercise) ? "checkmark.circle.fill" : "circle")
-                                    .foregroundColor(hasSetToday(for: exercise) ? .green : .gray)
-                                Text(exercise.name ?? "Unnamed Exercise")
-                            }
-                        }
-                        .contextMenu {
-                            Button {
-                                exerciseToRename = exercise
-                                newExerciseName = exercise.name ?? ""
-                                showingRenameAlert = true
-                            } label: {
-                                Label("Rename", systemImage: "pencil")
-                            }
-                            
-                            Button(role: .destructive) {
-                                if let index = filteredExercises.firstIndex(of: exercise) {
-                                    removeExercisesFromWorkout(at: IndexSet(integer: index))
-                                }
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        }
-                    }
-                    .onDelete(perform: removeExercisesFromWorkout)
-                }
-            }
+            exerciseList
         }
+        .background(Color(.systemGroupedBackground))
         .navigationTitle(workout.name ?? "Workout")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: { showingAddExercise = true }) {
-                    Label("Add Exercise", systemImage: "plus")
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title3)
                 }
             }
         }
@@ -106,6 +70,123 @@ struct WorkoutDetailView: View {
             }
         } message: {
             Text("Enter a new name for this exercise.")
+        }
+    }
+
+    private var categoryFilterHeader: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                categoryButton(title: "All", isSelected: selectedCategory == nil) {
+                    selectedCategory = nil
+                }
+                
+                ForEach(availableCategories, id: \.self) { category in
+                    categoryButton(title: category.id, isSelected: selectedCategory == category) {
+                        selectedCategory = category
+                    }
+                }
+            }
+            .padding()
+        }
+    }
+
+    private func categoryButton(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(isSelected ? Color.blue : Color(.secondarySystemBackground))
+                .foregroundColor(isSelected ? .white : .primary)
+                .cornerRadius(20)
+        }
+    }
+
+    private var exerciseList: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                if filteredExercises.isEmpty {
+                    emptyStateView
+                } else {
+                    exercisesView
+                }
+            }
+            .padding()
+        }
+    }
+
+    private var emptyStateView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "dumbbell.fill")
+                .font(.system(size: 48))
+                .foregroundColor(.secondary)
+            Text("No exercises found")
+                .font(.headline)
+            Text("Add your first exercise to get started.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+        }
+        .padding(.top, 60)
+    }
+
+    private var exercisesView: some View {
+        ForEach(filteredExercises, id: \.self) { exercise in
+            NavigationLink(destination: ExerciseDetailView(exercise: exercise)) {
+                exerciseCard(for: exercise)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .contextMenu {
+                exerciseContextMenu(for: exercise)
+            }
+        }
+    }
+
+    private func exerciseCard(for exercise: Exercise) -> some View {
+        GymCard {
+            HStack(spacing: 16) {
+                Image(systemName: hasSetToday(for: exercise) ? "checkmark.circle.fill" : "circle")
+                    .font(.title2)
+                    .foregroundColor(hasSetToday(for: exercise) ? .green : .secondary)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(exercise.name ?? "Unnamed Exercise")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    Text(exercise.categoryEnum.displayName)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(4)
+                }
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private func exerciseContextMenu(for exercise: Exercise) -> some View {
+        Group {
+            Button {
+                exerciseToRename = exercise
+                newExerciseName = exercise.name ?? ""
+                showingRenameAlert = true
+            } label: {
+                Label("Rename", systemImage: "pencil")
+            }
+            
+            Button(role: .destructive) {
+                if let index = filteredExercises.firstIndex(of: exercise) {
+                    removeExercisesFromWorkout(at: IndexSet(integer: index))
+                }
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
         }
     }
 

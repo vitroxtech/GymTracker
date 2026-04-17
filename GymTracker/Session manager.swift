@@ -13,6 +13,21 @@ class SessionManager: ObservableObject {
             return existingSession
         }
 
+        // Check if there's an unfinished session in Core Data
+        let request: NSFetchRequest<Session> = Session.fetchRequest()
+        request.predicate = NSPredicate(format: "workout == %@ AND endTime == nil", workout)
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \Session.startTime, ascending: false)]
+        request.fetchLimit = 1
+
+        do {
+            if let existingSession = try context.fetch(request).first {
+                activeSessions[workout] = existingSession
+                return existingSession
+            }
+        } catch {
+            print("Error checking for unfinished session in Core Data: \(error)")
+        }
+
         let session = Session(context: context)
         session.startTime = Date()
         session.totalVolume = 0
@@ -33,8 +48,44 @@ class SessionManager: ObservableObject {
 
         do {
             try context.save()
+            // Trigger sync to Google Sheets
+            GoogleSheetsSyncManager.shared.sync(context: context)
         } catch {
             print("Error saving session end: \(error)")
+        }
+    }
+
+    func finishActiveSession(for workout: Workout, context: NSManagedObjectContext) {
+        if let session = activeSessions[workout] {
+            finishSession(session, context: context)
+            activeSessions.removeValue(forKey: workout)
+        } else {
+            // If not in cache, find the most recent unfinished session for this workout
+            let request: NSFetchRequest<Session> = Session.fetchRequest()
+            request.predicate = NSPredicate(format: "workout == %@ AND endTime == nil", workout)
+            request.sortDescriptors = [NSSortDescriptor(keyPath: \Session.startTime, ascending: false)]
+            request.fetchLimit = 1
+            
+            do {
+                if let session = try context.fetch(request).first {
+                    finishSession(session, context: context)
+                }
+            } catch {
+                print("Error searching for unfinished session: \(error)")
+            }
+        }
+    }
+
+    func finishSession(_ session: Session, context: NSManagedObjectContext) {
+        session.endTime = Date()
+        session.duration = session.endTime?.timeIntervalSince(session.startTime ?? Date()) ?? 0
+        
+        do {
+            try context.save()
+            // Trigger sync to Google Sheets
+            GoogleSheetsSyncManager.shared.sync(context: context)
+        } catch {
+            print("Error finishing session: \(error)")
         }
     }
 

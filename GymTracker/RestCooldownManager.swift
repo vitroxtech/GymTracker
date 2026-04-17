@@ -15,20 +15,19 @@ final class RestCooldownManager: ObservableObject {
     private var activity: Activity<RestTimerAttributes>?
     private var timer: Timer?
     @Published var remaining: Int = 0
+    @Published var totalDuration: TimeInterval = 120
     private var cooldownEnd: Date?
-    
-    private let cooldownDuration: TimeInterval = 120
-
     private init() {}
 
     func startCooldown(duration: TimeInterval = 120) {
+        self.totalDuration = duration > 0 ? duration : 120
         let start = Date()
-        let end = start.addingTimeInterval(duration)
+        let end = start.addingTimeInterval(self.totalDuration)
         cooldownEnd = end
 
         // Start Live Activity
         let attributes = RestTimerAttributes()
-        let content = RestTimerAttributes.ContentState(startDate: start, duration: duration)
+        let content = RestTimerAttributes.ContentState(startDate: start, duration: self.totalDuration)
 
         do {
             activity = try Activity<RestTimerAttributes>.request(attributes: attributes, contentState: content)
@@ -40,10 +39,10 @@ final class RestCooldownManager: ObservableObject {
         // Schedule Local Notification
         let contentNotif = UNMutableNotificationContent()
         contentNotif.title = "Rest Time Over"
-        contentNotif.body = "Your \(Int(duration)) seconds rest is complete"
+        contentNotif.body = "Your \(Int(self.totalDuration)) seconds rest is complete"
         contentNotif.sound = .default
 
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: duration, repeats: false)
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: self.totalDuration, repeats: false)
         let request = UNNotificationRequest(identifier: "rest_done", content: contentNotif, trigger: trigger)
         UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
@@ -59,21 +58,24 @@ final class RestCooldownManager: ObservableObject {
 
     private func startCountdown(to endDate: Date) {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-            let remainingSeconds = Int(endDate.timeIntervalSinceNow)
+        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+            let remainingSeconds = Int(ceil(endDate.timeIntervalSinceNow))
             self.remaining = max(0, remainingSeconds)
-            if self.remaining <= 0 {
-                self.cancelCooldown()
+            if endDate.timeIntervalSinceNow <= 0 {
+                self.cancelCooldown(fromTimer: true)
             }
         }
     }
 
-    func cancelCooldown() {
+    func cancelCooldown(fromTimer: Bool = false) {
         cooldownEnd = nil
         timer?.invalidate()
         timer = nil
         remaining = 0
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["rest_done"])
+        
+        if !fromTimer {
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["rest_done"])
+        }
 
         Task {
             await activity?.end(dismissalPolicy: .immediate)
